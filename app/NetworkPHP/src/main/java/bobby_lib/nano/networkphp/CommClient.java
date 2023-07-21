@@ -50,6 +50,7 @@ public class CommClient implements Response.ErrorListener, Response.Listener<Str
     }
 
     private final Map<String, String> DATA = new HashMap<>();
+    private final Map<String, String> Headers = new HashMap<>();
     private ResponseHandler handler;
 
     public void setResponseHandler(ResponseHandler handler) {
@@ -72,7 +73,11 @@ public class CommClient implements Response.ErrorListener, Response.Listener<Str
     public void setData(String Tag, String value) {
         DATA.put(Tag, value);
     }
+    String hostName;
+    public void setExclusiveHost(String host){
+        hostName=host;
 
+    }
     public void Send(Context context, String url) {
 
         HurlStack hurlStack = new HurlStack() {
@@ -80,8 +85,10 @@ public class CommClient implements Response.ErrorListener, Response.Listener<Str
             protected HttpURLConnection createConnection(URL url) throws IOException {
                 HttpsURLConnection httpsURLConnection = (HttpsURLConnection) super.createConnection(url);
                 try {
-                    httpsURLConnection.setSSLSocketFactory(getSSLSocketFactory(context, CertID));
-                    httpsURLConnection.setHostnameVerifier(getHostnameVerifier());
+                    if(CertID!=0)
+                        httpsURLConnection.setSSLSocketFactory(getSSLSocketFactory(context, CertID));
+                    if(hostName!=null)
+                        httpsURLConnection.setHostnameVerifier(getHostnameVerifier(hostName));
                 } catch (Exception e) {
                     if (handler != null) {
                         handler.Error();
@@ -237,14 +244,14 @@ public class CommClient implements Response.ErrorListener, Response.Listener<Str
     }
 
 
-    private HostnameVerifier getHostnameVerifier() {
+    private HostnameVerifier getHostnameVerifier(String hostName) {
         return new HostnameVerifier() {
             @Override
             public boolean verify(String hostname, SSLSession session) {
                 //return true; // verify always returns true, which could cause insecure network traffic due to trusting TLS/SSL server certificates for wrong hostnames
                 HostnameVerifier hv = HttpsURLConnection.getDefaultHostnameVerifier();
 
-                if (hostname.equals("79.129.38.103"))
+                if (hostname.equals(hostName))
                     return true;
                 else
                     return hv.verify(hostname, session);
