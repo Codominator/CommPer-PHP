@@ -3,7 +3,6 @@ package bobby_lib.nano.networkphp;
 import android.content.Context;
 import android.util.Log;
 
-import androidx.annotation.RawRes;
 import androidx.work.Data;
 
 import com.android.volley.AuthFailureError;
@@ -12,94 +11,45 @@ import com.android.volley.RequestQueue;
 import com.android.volley.Response;
 import com.android.volley.VolleyError;
 import com.android.volley.toolbox.HurlStack;
+import com.android.volley.toolbox.RequestFuture;
 import com.android.volley.toolbox.StringRequest;
 import com.android.volley.toolbox.Volley;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.google.gson.JsonSyntaxException;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.security.KeyManagementException;
-import java.security.KeyStore;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
-import java.security.cert.Certificate;
-import java.security.cert.CertificateException;
-import java.security.cert.CertificateFactory;
-import java.security.cert.X509Certificate;
-import java.util.HashMap;
 import java.util.Map;
-import java.util.logging.Handler;
+import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
-import javax.net.ssl.HostnameVerifier;
-import javax.net.ssl.HttpsURLConnection;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLSession;
-import javax.net.ssl.SSLSocketFactory;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.TrustManagerFactory;
-import javax.net.ssl.X509TrustManager;
+import bobby_lib.nano.networkphp.Interfaces.BaseProtocol;
+import bobby_lib.nano.networkphp.Interfaces.ResponseHandler;
 
-public class CommClient implements Response.ErrorListener, Response.Listener<String> {
+public class CommClient extends BaseClient implements Response.ErrorListener, Response.Listener<String> {
 
     public CommClient() {
-
+        setHeader("Content-Type", "application/x-www-form-urlencoded");
     }
 
-    private final Map<String, String> DATA = new HashMap<>();
-    private final Map<String, String> Headers = new HashMap<>();
     private ResponseHandler handler;
-
+    BaseProtocol baseProtocol;
     public void setResponseHandler(ResponseHandler handler) {
         this.handler = handler;
+        this.baseProtocol = null;
     }
-
-    ;
-
-
-    private static @RawRes int CertID;
-
-    public static void setCertificate(@RawRes int CertID) {
-        CommClient.CertID = CertID;
+    public void setResponseHandler(BaseProtocol baseProtocol) {
+        this.baseProtocol = baseProtocol;
+        this.handler = null;
     }
-
-    public void clearData() {
-        DATA.clear();
-    }
-
-    public void setData(String Tag, String value) {
-        DATA.put(Tag, value);
-    }
-    String hostName;
-    public void setExclusiveHost(String host){
-        hostName=host;
-
-    }
+    String url="";
+    @Override
     public void Send(Context context, String url) {
-
-        HurlStack hurlStack = new HurlStack() {
-            @Override
-            protected HttpURLConnection createConnection(URL url) throws IOException {
-                HttpsURLConnection httpsURLConnection = (HttpsURLConnection) super.createConnection(url);
-                try {
-                    if(CertID!=0)
-                        httpsURLConnection.setSSLSocketFactory(getSSLSocketFactory(context, CertID));
-                    if(hostName!=null)
-                        httpsURLConnection.setHostnameVerifier(getHostnameVerifier(hostName));
-                } catch (Exception e) {
-                    if (handler != null) {
-                        handler.Error();
-                        //OnErrorListener.Error();
-                    }
-                    e.printStackTrace();
-                }
-                httpsURLConnection.setChunkedStreamingMode(0);
-                return httpsURLConnection;
-            }
-        };
+        this.url=url;
+        HurlStack hurlStack = buildConnection(context,handler);
 
         RequestQueue queue = Volley.newRequestQueue(context, hurlStack);
 
@@ -114,9 +64,7 @@ public class CommClient implements Response.ErrorListener, Response.Listener<Str
 
             @Override
             public Map<String, String> getHeaders() throws AuthFailureError {
-                Map<String, String> params = new HashMap<>();
-                params.put("Content-Type", "application/x-www-form-urlencoded");
-                return params;
+                return HEADERS;
             }
 
         };
@@ -125,29 +73,51 @@ public class CommClient implements Response.ErrorListener, Response.Listener<Str
 
         //sr.setRetryPolicy(retryPolicy);
         queue.add(sr);
-       /* }else{
-            VolleyMultiPartRequest sr=new VolleyMultiPartRequest(Request.Method.POST,url,this,this){
 
+    }
 
-                @Override
-                protected Map<String, String> getParams() {
-                    return DATA;
-                }
-                protected Map<String, DataPart> getByteData() {
-                    return FILES;
-                }
-            };
-            queue.add(sr);
+    @Override
+    public boolean SyncSend(Context context, String url) {
+        this.url=url;
+        HurlStack hurlStack = buildConnection(context,handler);
+        RequestQueue queue = Volley.newRequestQueue(context, hurlStack);
+        RequestFuture<String> future = RequestFuture.newFuture();
+        StringRequest request = new StringRequest(Request.Method.POST, url, future, future) {
+            @Override
+            protected Map<String, String> getParams() {
+                return DATA;
+            }
 
+            @Override
+            public Map<String, String> getHeaders() throws AuthFailureError {
+                return HEADERS;
+            }
+
+        };
+
+        queue.add(request);
+        try {
+            // Set an interval for the request to timeout. This will block the
+            // worker thread and force it to wait for a response for 60 seconds
+            // before timing out and raising an exception
+            String response = future.get(30, TimeUnit.MINUTES);
+            Log.e("TagM", response);
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            //mMessageListener.OnFailed("904", "Connection is not available");
+            e.printStackTrace();
         }
-*/
+        return false;
     }
 
     @Override
     public void onErrorResponse(VolleyError error) {
+        if(baseProtocol!=null){
+            baseProtocol.OnError(error);
+            return;
+        }
         Log.e("VolleyError", error.getMessage() + "");
         if (handler != null) {
-            handler.Error();
+            handler.Error(error);
             handler.OnRetry(0);
             handler.Finish();
             //  if(retry!=null)
@@ -161,11 +131,25 @@ public class CommClient implements Response.ErrorListener, Response.Listener<Str
 
     @Override
     public void onResponse(String response) {
-        Log.e("TagM", response);
+        Log.d("Reply from url "+url+":", response);
+        if(baseProtocol!=null){
+            baseProtocol.OnReceive(response);
+            return;
+        }
+        if(!isJsonValid(response)){
+            handler.OnSuccess(response,false);
+            return;
+        }
+
         if (handler != null) {
             JsonObject jsonObject = new Gson().fromJson(response, JsonObject.class);
             if (jsonObject == null)
                 Log.e("Error", "Empty message");
+
+            Set<String> keys=jsonObject.keySet();
+            for(String key:keys) {
+                Log.e("key", key);
+            }
             if (jsonObject.has("ErrorCode")) {
                 String Error = new Gson().fromJson(jsonObject.remove("ErrorCode"), String.class);
                 String DATA = "";
@@ -218,82 +202,21 @@ public class CommClient implements Response.ErrorListener, Response.Listener<Str
         return builder.build();
     }
 
-    private SSLSocketFactory getSSLSocketFactory(Context contextA, @RawRes int CertID)
-            throws CertificateException, KeyStoreException, IOException, NoSuchAlgorithmException, KeyManagementException {
-        CertificateFactory cf = CertificateFactory.getInstance("X.509");
 
-        InputStream caInput = contextA.getResources().openRawResource(CertID);//R.raw.client_cert); // this cert file stored in \app\src\main\res\raw folder path
-
-        Certificate ca = cf.generateCertificate(caInput);
-        caInput.close();
-
-        KeyStore keyStore = KeyStore.getInstance("BKS");
-        keyStore.load(null, null);
-        keyStore.setCertificateEntry("ca", ca);
-
-        String tmfAlgorithm = TrustManagerFactory.getDefaultAlgorithm();
-        TrustManagerFactory tmf = TrustManagerFactory.getInstance(tmfAlgorithm);
-        tmf.init(keyStore);
-
-        TrustManager[] wrappedTrustManagers = getWrappedTrustManagers(tmf.getTrustManagers());
-
-        SSLContext sslContext = SSLContext.getInstance("TLS");
-        sslContext.init(null, wrappedTrustManagers, null);
-
-        return sslContext.getSocketFactory();
+    String tusServer=null;
+    public void setTusUrlServer(String url){
+        tusServer=url;
     }
+    public void SendTusFile(){
 
-
-    private HostnameVerifier getHostnameVerifier(String hostName) {
-        return new HostnameVerifier() {
-            @Override
-            public boolean verify(String hostname, SSLSession session) {
-                //return true; // verify always returns true, which could cause insecure network traffic due to trusting TLS/SSL server certificates for wrong hostnames
-                HostnameVerifier hv = HttpsURLConnection.getDefaultHostnameVerifier();
-
-                if (hostname.equals(hostName))
-                    return true;
-                else
-                    return hv.verify(hostname, session);
-            }
-        };
     }
-
-
-    private TrustManager[] getWrappedTrustManagers(TrustManager[] trustManagers) {
-        final X509TrustManager originalTrustManager = (X509TrustManager) trustManagers[0];
-        return new TrustManager[]{
-                new X509TrustManager() {
-                    public X509Certificate[] getAcceptedIssuers() {
-                        return originalTrustManager.getAcceptedIssuers();
-                    }
-
-                    public void checkClientTrusted(X509Certificate[] certs, String authType) {
-                        try {
-                            if (certs != null && certs.length > 0) {
-                                certs[0].checkValidity();
-                            } else {
-                                originalTrustManager.checkClientTrusted(certs, authType);
-                            }
-                        } catch (CertificateException e) {
-                            Log.w("checkClientTrusted", e.toString());
-                        }
-                    }
-
-                    public void checkServerTrusted(X509Certificate[] certs, String authType) {
-                        try {
-                            if (certs != null && certs.length > 0) {
-                                certs[0].checkValidity();
-                            } else {
-                                originalTrustManager.checkServerTrusted(certs, authType);
-                            }
-                        } catch (CertificateException e) {
-                            Log.w("checkServerTrusted", e.toString());
-                        }
-                    }
-                }
-        };
-
+    public static boolean isJsonValid(String json) {
+        try {
+            JsonParser.parseString(json);
+        } catch (JsonSyntaxException e) {
+            return false;
+        }
+        return true;
     }
 }
 

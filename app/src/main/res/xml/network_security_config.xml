@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="@raw/certificate"/>
+            <certificates src="system"/>
+            <domain includeSubdomains="true">bobbo.duckdns.org</domain>
+        </trust-anchors>
+    </base-config>
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">bobbo.duckdns.org</domain>
+    </domain-config>
+</network-security-config>

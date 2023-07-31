@@ -1,6 +1,8 @@
 package bobby_lib.nano.networkphp;
 
-public class DefaultHandler implements ResponseHandler{
+import bobby_lib.nano.networkphp.Interfaces.ResponseHandler;
+
+public class DefaultHandler implements ResponseHandler {
     @Override
     public void OnSuccess(String message, boolean isHashed) {
 
@@ -22,7 +24,7 @@ public class DefaultHandler implements ResponseHandler{
     }
 
     @Override
-    public boolean Error() {
+    public boolean Error(Exception e) {
         return false;
     }
 
